@@ -45,7 +45,7 @@ PKIshare/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/PKIshare.git
+git clone https://github.com/RK-tamang/PKIshare.git
 cd PKIshare
 
 # Create virtual environment
