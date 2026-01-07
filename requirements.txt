@@ -1,0 +1,32 @@
+# PKIshare - Secure Digital Certificate and File Sharing System
+# requirements.txt
+
+# For the GUI application
+cryptography>=41.0.0
+Pillow>=10.0.0
+# Note: We're using cryptography for Fernet encryption
+# Install with: pip install cryptography Pillow
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# App data
+data/
+files/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+
