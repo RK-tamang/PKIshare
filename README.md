@@ -10,7 +10,7 @@ A secure file sharing application built with Public Key Infrastructure (PKI) pri
 - **Digital Signatures**: Cryptographic signatures for file integrity verification
 - **Access Control**: Granular file sharing with recipient selection and access revocation
 - **Secure Storage**: Personal encrypted file repository with password protection
-- **User Management**: View registered users and their certificate status
+- **SQLite Database**: All data stored in SQLite database with proper schema
 
 ## Architecture
 
@@ -18,19 +18,26 @@ A secure file sharing application built with Public Key Infrastructure (PKI) pri
 PKIshare/
 ├── main.py                 # Application entry point
 ├── requirements.txt        # Python dependencies
+├── Dockerfile             # Docker container definition
+├── docker-compose.yml     # Docker Compose for app + SQLite
 ├── .gitignore             # Git ignore rules
+├── README.md              # This file
 ├── core/
 │   ├── __init__.py
 │   ├── models.py          # Data models (DigitalCertificate, UserAccount, EncryptedFile)
 │   ├── secure_share.py    # Core engine (PKIshareCore class)
+│   ├── database.py        # SQLite database layer
 │   └── utils.py           # Cryptographic utility functions
 ├── gui/
 │   ├── __init__.py
 │   └── app.py             # Tkinter GUI application (PKIshareApp class)
 └── data/                   # Application data (auto-created)
-    ├── accounts.json       # User accounts and certificates
-    ├── encrypted_files.json # Shared file metadata
-    └── shared_repository.json # Personal file storage metadata
+    └── pki_share.db        # SQLite database
+        ├── users           # User accounts
+        ├── certificates    # Digital certificates
+        ├── encrypted_files # Shared file metadata
+        ├── file_keys       # Encrypted symmetric keys
+        └── shared_files    # Personal file storage
 ```
 
 ## Security Features
@@ -42,6 +49,8 @@ PKIshare/
 5. **Certificate-Based Identity**: X.509 style self-signed certificates
 
 ## Installation
+
+### Option 1: Local Development
 
 ```bash
 # Clone the repository
@@ -59,12 +68,52 @@ pip install -r requirements.txt
 python main.py
 ```
 
-## Dependencies
+### Option 2: Docker Compose (Recommended)
 
-- Python 3.8+
-- cryptography>=41.0.0
-- Pillow>=10.0.0
-- tkinter (included with Python)
+```bash
+# Build and run with Docker Compose
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop the application
+docker-compose down
+```
+
+The application will be available at http://localhost:5000
+
+## Docker Configuration
+
+The Docker setup includes:
+- Python 3.11 slim container
+- SQLite database persisted in Docker volume
+- Health check for container monitoring
+- Automatic restart policy
+
+## Database Schema
+
+### users table
+- id, username, password_hash, salt, private_key_encrypted
+- share_password_hash, share_salt, created_at
+
+### certificates table
+- id, user_id, version, serial, subject, issuer
+- valid_from, valid_to, public_key_pem, signature
+
+### encrypted_files table
+- id, file_id, filename, owner_id, file_hash
+- signature, timestamp, encrypted_data_path
+
+### file_keys table
+- id, file_id, user_id, encrypted_key
+
+### shared_files table
+- id, share_id, owner_id, filename, file_hash
+- encrypted_key, timestamp, size, encrypted_data_path
+
+### revoked_certs table
+- id, serial, revoked_at
 
 ## Usage
 
@@ -100,6 +149,7 @@ python main.py
 - Private keys are encrypted with password-derived keys
 - All files are encrypted with unique symmetric keys
 - Digital signatures ensure file integrity and authenticity
+- SQLite database provides persistent storage with proper relationships
 
 ## Development
 
@@ -109,6 +159,9 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
+# Run the application
+python main.py
+
 # Run tests (when available)
 pytest
 
@@ -116,12 +169,24 @@ pytest
 flake8 .
 ```
 
+## API Reference
+
+### PKIshareCore Methods
+
+- `create_user_account(username, password)` - Create new user with certificate
+- `authenticate_user(username, password)` - Authenticate user
+- `distribute_file(filepath, recipients, password)` - Share file with recipients
+- `retrieve_file(file_id, save_path, password)` - Download and decrypt file
+- `store_in_share(filepath, password)` - Store file in personal repository
+- `list_share_contents()` - List personal repository files
+- `extract_from_share(share_id, save_path, password)` - Download from repository
+
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
+2. Create a feature branch (`git checkout -b dev`)
+3. Commit your changes (`git commit -am 'Add new feature'`)
+4. Push to the branch (`git push origin dev`)
 5. Create a Pull Request
 
 ## License

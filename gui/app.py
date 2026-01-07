@@ -141,7 +141,7 @@ class PKIshareApp:
 
         header = ttk.Frame(self.main_container)
         header.pack(fill=tk.X, pady=(0, 20))
-        ttk.Label(header, text=f"Welcome, {self.core.current_user}!", style='Title.TLabel').pack(side=tk.LEFT)
+        ttk.Label(header, text=f"Welcome, {self.core.current_username}!", style='Title.TLabel').pack(side=tk.LEFT)
         ttk.Button(header, text="Logout", command=self.terminate_session).pack(side=tk.RIGHT)
 
         notebook = ttk.Notebook(self.main_container)
@@ -167,7 +167,7 @@ class PKIshareApp:
         recip_frame.pack(fill=tk.X, padx=20, pady=15)
 
         all_users = self.core.get_all_users()
-        others = [u for u in all_users if u != self.core.current_user]
+        others = [u for u in all_users if u != self.core.current_username]
         self.recipient_states = {}
 
         if others:
@@ -241,17 +241,23 @@ class PKIshareApp:
 
         files = self.core.fetch_shared_collection()
         for ef in files:
-            recipients = [u for u in ef.encrypted_sym_key.keys() if u != ef.owner]
+            recipients = []
+            # Get file keys to determine recipients
+            file_keys = self.core.db.get_file_keys(ef["id"])
+            for k in file_keys:
+                if k["user_id"] != ef["owner_id"]:
+                    recipients.append(k.get("username", ""))
+            
             recip_str = "(Only me)" if not recipients else ", ".join(recipients[:4])
             if len(recipients) > 4:
                 recip_str += "..."
 
-            self.files_view.insert("", tk.END, iid=ef.file_id, values=(
-                ef.file_id[:15] + "...",
-                ef.filename,
-                ef.owner,
+            self.files_view.insert("", tk.END, iid=ef["file_id"], values=(
+                ef["file_id"][:15] + "...",
+                ef["filename"],
+                ef.get("owner_name", "Unknown"),
                 recip_str,
-                ef.timestamp[:10]
+                ef["timestamp"][:10]
             ))
 
     def process_file_download(self):
@@ -260,9 +266,13 @@ class PKIshareApp:
             messagebox.showerror("Error", "Please select a file to download")
             return
         file_id = selection[0]
-        ef = self.core.encrypted_files[file_id]
+        file_data = self.core.db.get_file_by_id(file_id)
 
-        save_path = filedialog.asksaveasfilename(title="Save decrypted file as", initialfile=ef.filename)
+        if not file_data:
+            messagebox.showerror("Error", "File not found")
+            return
+
+        save_path = filedialog.asksaveasfilename(title="Save decrypted file as", initialfile=file_data["filename"])
         if not save_path:
             return
 
@@ -277,9 +287,13 @@ class PKIshareApp:
             messagebox.showerror("Error", "Please select a file")
             return
         file_id = selection[0]
-        ef = self.core.encrypted_files[file_id]
+        file_data = self.core.db.get_file_by_id(file_id)
 
-        if ef.owner != self.core.current_user:
+        if not file_data:
+            messagebox.showerror("Error", "File not found")
+            return
+
+        if file_data["owner_id"] != self.core.current_user_id:
             messagebox.showerror("Error", "Only the file owner can revoke access")
             return
 
@@ -289,18 +303,18 @@ class PKIshareApp:
         dialog.transient(self.root)
         dialog.grab_set()
 
-        ttk.Label(dialog, text=f"Manage access to '{ef.filename}':", font=('Arial', 12, 'bold')).pack(pady=15)
+        ttk.Label(dialog, text=f"Manage access to '{file_data['filename']}:", font=('Arial', 12, 'bold')).pack(pady=15)
 
         current_frame = ttk.LabelFrame(dialog, text=" Current Access ", padding=10)
         current_frame.pack(fill=tk.X, padx=20, pady=10)
 
         revoke_vars = {}
-        for user in ef.encrypted_sym_key:
-            if user == ef.owner:
-                continue
-            var = tk.BooleanVar()
-            ttk.Checkbutton(current_frame, text=f"{user} (has access)", variable=var).pack(anchor=tk.W, padx=10, pady=2)
-            revoke_vars[user] = var
+        file_keys = self.core.db.get_file_keys(file_data["id"])
+        for k in file_keys:
+            if k["user_id"] != self.core.current_user_id:
+                var = tk.BooleanVar()
+                ttk.Checkbutton(current_frame, text=f"{k.get('username', 'Unknown')} (has access)", variable=var).pack(anchor=tk.W, padx=10, pady=2)
+                revoke_vars[k["user_id"]] = var
 
         if not revoke_vars:
             ttk.Label(current_frame, text="No other users have access", foreground='gray').pack(anchor=tk.W, padx=10)
@@ -310,9 +324,12 @@ class PKIshareApp:
 
         def perform_revoke():
             revoked = []
-            for user, var in revoke_vars.items():
-                if var.get() and self.core.remove_file_access(file_id, user):
-                    revoked.append(user)
+            for user_id, var in revoke_vars.items():
+                if var.get():
+                    # Get username
+                    user = self.core.db.get_user_by_id(user_id)
+                    if user and self.core.remove_file_access(file_id, user["username"]):
+                        revoked.append(user["username"])
             messagebox.showinfo("Success", f"Access revoked for: {', '.join(revoked) if revoked else 'none'}")
             dialog.destroy()
             self.update_files_view()
@@ -340,14 +357,14 @@ class PKIshareApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         for user in sorted(self.core.get_all_users()):
-            status = "You" if user == self.core.current_user else ""
+            status = "You" if user == self.core.current_username else ""
             tree.insert("", tk.END, values=(status, user))
 
     def setup_share_panel_main(self, notebook):
         tab = ttk.Frame(notebook)
         notebook.add(tab, text="Shared Repository")
 
-        has_share_password = self.core.check_share_protection(self.core.current_user)
+        has_share_password = self.core.check_share_protection(self.core.current_username)
 
         if not has_share_password:
             self._render_set_share_password(tab)
@@ -399,7 +416,7 @@ class PKIshareApp:
         share_pwd_entry.pack(pady=5)
 
         def verify_password():
-            if self.core.validate_share_credentials(self.core.current_user, share_pwd_entry.get()):
+            if self.core.validate_share_credentials(self.core.current_username, share_pwd_entry.get()):
                 self.share_key = share_pwd_entry.get()
                 self.share_unlocked = True
                 for widget in parent.winfo_children():
@@ -503,7 +520,11 @@ class PKIshareApp:
             messagebox.showerror("Error", "Please select a file")
             return
         share_id = selection[0]
-        sf = self.core.share_files[share_id]
+        sf = self.core.db.get_shared_file_by_id(share_id)
+
+        if not sf:
+            messagebox.showerror("Error", "File not found")
+            return
 
         save_path = filedialog.asksaveasfilename(title="Save decrypted file as", initialfile=sf["filename"])
         if not save_path:
@@ -520,7 +541,11 @@ class PKIshareApp:
             messagebox.showerror("Error", "Please select a file")
             return
         share_id = selection[0]
-        sf = self.core.share_files[share_id]
+        sf = self.core.db.get_shared_file_by_id(share_id)
+
+        if not sf:
+            messagebox.showerror("Error", "File not found")
+            return
 
         if messagebox.askyesno("Confirm", f"Delete '{sf['filename']}'?"):
             if self.core.remove_from_share(share_id):
@@ -545,7 +570,7 @@ class PKIshareApp:
         new_pwd.pack(pady=5)
 
         def save_new_password():
-            if self.core.validate_share_credentials(self.core.current_user, current_pwd.get()):
+            if self.core.validate_share_credentials(self.core.current_username, current_pwd.get()):
                 if self.core.configure_share_password(new_pwd.get()):
                     messagebox.showinfo("Success", "Password changed!")
                     dialog.destroy()
@@ -558,24 +583,27 @@ class PKIshareApp:
         tab = ttk.Frame(notebook)
         notebook.add(tab, text="Your Certificate")
 
-        user = self.core.users[self.core.current_user]
-        cert = user.certificate
+        cert = self.core.get_certificate()
 
-        info = (
-            f"Certificate (PKIshare)\n"
-            f"Subject: {cert.subject}\n"
-            f"Serial: {cert.serial}\n"
-            f"Issuer: {cert.issuer}\n"
-            f"Valid From: {cert.valid_from[:10]}\n"
-            f"Valid To: {cert.valid_to[:10]}\n"
-            f"Status: VALID\n"
-        )
+        if cert:
+            info = (
+                f"Certificate (PKIshare)\n"
+                f"Subject: {cert['subject']}\n"
+                f"Serial: {cert['serial']}\n"
+                f"Issuer: {cert['issuer']}\n"
+                f"Valid From: {cert['valid_from'][:10]}\n"
+                f"Valid To: {cert['valid_to'][:10]}\n"
+                f"Status: VALID\n"
+            )
+        else:
+            info = "No certificate found"
 
         label = ttk.Label(tab, text=info, font=('Courier', 10), background="#f0f0f0", relief="groove", padding=30)
         label.pack(padx=40, pady=40, fill=tk.X)
 
     def terminate_session(self):
-        self.core.current_user = None
+        self.core.current_user_id = None
+        self.core.current_username = None
         self.session_key = None
         self.share_key = None
         self.share_unlocked = False
