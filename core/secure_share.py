@@ -1,7 +1,6 @@
 # PKIshare - Secure Digital Certificate and File Sharing System
 # core/secure_share.py
 
-import json
 import datetime
 import base64
 from pathlib import Path

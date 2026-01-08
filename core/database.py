@@ -1,7 +1,6 @@
 # core/database.py - SQLite database layer for PKIshare
 
 import sqlite3
-import json
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any, List
