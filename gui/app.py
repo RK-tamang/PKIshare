@@ -330,8 +330,16 @@ class PKIshareApp:
         ttk.Label(top_bar, text="Shared Files", style='Heading.TLabel').pack(side=tk.LEFT)
         self.create_modern_button(top_bar, "Refresh", self.update_files_view, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.RIGHT)
 
-        tree_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=15)
+        # Split view: file list and preview
+        content_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        content_frame.pack(fill=tk.BOTH, expand=True, padx=15)
+
+        # Left side: file list
+        left_frame = tk.Frame(content_frame, bg=self.COLORS['bg_secondary'])
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 7))
+
+        tree_frame = tk.Frame(left_frame, bg=self.COLORS['bg_secondary'])
+        tree_frame.pack(fill=tk.BOTH, expand=True)
         columns = ("ID", "Filename", "Owner", "Recipients", "Date")
         self.files_view = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
         for col, width in zip(columns, [120, 250, 120, 250, 130]):
@@ -341,6 +349,25 @@ class PKIshareApp:
         self.files_view.configure(yscrollcommand=scrollbar.set)
         self.files_view.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bind selection event for preview
+        self.files_view.bind("<<TreeviewSelect>>", self.on_file_selected)
+
+        # Right side: preview panel
+        self.preview_card = self.create_card(content_frame)
+        self.preview_card.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(7, 0))
+        
+        self.preview_label = ttk.Label(self.preview_card, text="Select a file to preview", 
+                                       font=('Segoe UI', 12), foreground=self.COLORS['text_light'],
+                                       background=self.COLORS['bg_secondary'])
+        self.preview_label.pack(pady=50)
+        
+        self.preview_image_label = tk.Label(self.preview_card, bg=self.COLORS['bg_secondary'])
+        self.preview_image_label.pack_forget()
+        
+        self.preview_text = tk.Text(self.preview_card, wrap=tk.WORD, font=('Consolas', 10),
+                                    bg='#f5f5f5', relief='flat', state='disabled')
+        self.preview_text.pack_forget()
 
         action_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
         action_frame.pack(fill=tk.X, padx=15, pady=15)
@@ -349,6 +376,109 @@ class PKIshareApp:
         self.create_modern_button(action_frame, "Grant Access", self.grant_file_access_dialog, bg=self.COLORS['accent']).pack(side=tk.LEFT)
 
         self.update_files_view()
+
+    def on_file_selected(self, event):
+        """Handle file selection for preview."""
+        selection = self.files_view.selection()
+        if not selection:
+            self.clear_preview()
+            return
+        
+        file_id = selection[0]
+        self.show_file_preview(file_id)
+
+    def clear_preview(self):
+        """Clear the preview panel."""
+        self.preview_label.pack_forget()
+        self.preview_image_label.pack_forget()
+        self.preview_text.pack_forget()
+        self.preview_label.configure(text="Select a file to preview")
+        self.preview_label.pack(pady=50)
+
+    def show_file_preview(self, file_id):
+        """Show a preview of the selected file."""
+        file_data = self.core.db.get_file_by_id(file_id)
+        if not file_data:
+            self.clear_preview()
+            return
+        
+        filename = file_data["filename"]
+        ext = Path(filename).suffix.lower()
+        
+        # Create a temporary file to decrypt
+        import tempfile
+        import os
+        
+        temp_path = tempfile.mktemp(suffix=filename)
+        try:
+            if self.core.retrieve_file(file_id, temp_path, self.session_key):
+                # Show preview based on file type
+                if ext in ['.txt', '.py', '.js', '.html', '.css', '.json', '.xml', '.md', '.log', '.csv']:
+                    self.show_text_preview(temp_path)
+                elif ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico']:
+                    self.show_image_preview(temp_path)
+                else:
+                    self.preview_label.configure(text=f"Preview not available for\n{filename}\n\nClick Download to save the file")
+                    self.preview_label.pack(pady=50)
+                    self.preview_image_label.pack_forget()
+                    self.preview_text.pack_forget()
+            else:
+                self.preview_label.configure(text="Unable to preview file")
+                self.preview_label.pack(pady=50)
+        except Exception as e:
+            self.preview_label.configure(text=f"Preview error:\n{str(e)}")
+            self.preview_label.pack(pady=50)
+        finally:
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def show_text_preview(self, filepath):
+        """Show text file preview."""
+        self.preview_label.pack_forget()
+        self.preview_image_label.pack_forget()
+        self.preview_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read(5000)  # Limit to 5000 chars
+            self.preview_text.config(state='normal')
+            self.preview_text.delete('1.0', tk.END)
+            self.preview_text.insert('1.0', content)
+            if len(content) >= 5000:
+                self.preview_text.insert(tk.END, '\n\n... (content truncated for preview)')
+            self.preview_text.config(state='disabled')
+        except Exception as e:
+            self.preview_text.config(state='normal')
+            self.preview_text.delete('1.0', tk.END)
+            self.preview_text.insert('1.0', f"Error reading file: {e}")
+            self.preview_text.config(state='disabled')
+
+    def show_image_preview(self, filepath):
+        """Show image file preview."""
+        try:
+            from PIL import Image, ImageTk
+            
+            self.preview_text.pack_forget()
+            self.preview_label.pack_forget()
+            self.preview_image_label.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+            
+            image = Image.open(filepath)
+            
+            # Resize image to fit in preview area (max 400x300)
+            image.thumbnail((400, 300))
+            photo = ImageTk.PhotoImage(image)
+            
+            self.preview_image_label.configure(image=photo)
+            self.preview_image_label.image = photo  # Keep reference
+        except ImportError:
+            self.preview_image_label.pack_forget()
+            self.preview_label.configure(text="Image preview requires\nPIL library.\n\nClick Download to save.")
+            self.preview_label.pack(pady=50)
+        except Exception as e:
+            self.preview_image_label.pack_forget()
+            self.preview_label.configure(text=f"Error loading image:\n{str(e)}")
+            self.preview_label.pack(pady=50)
 
     def update_files_view(self):
         for item in self.files_view.get_children():
