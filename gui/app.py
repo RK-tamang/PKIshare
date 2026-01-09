@@ -12,11 +12,26 @@ from core.secure_share import PKIshareCore
 class PKIshareApp:
     """Main GUI application for PKI-based secure file sharing."""
     
+    # Modern color palette
+    COLORS = {
+        'bg_primary': '#f8f9fa',
+        'bg_secondary': '#ffffff',
+        'accent': '#0984e3',
+        'accent_hover': '#0773c7',
+        'success': '#00b894',
+        'error': '#d63031',
+        'text_primary': '#2d3436',
+        'text_secondary': '#636e72',
+        'text_light': '#b2bec3',
+        'border': '#dfe6e9',
+    }
+    
     def __init__(self, root):
         self.root = root
         self.root.title("PKIshare - Secure Digital Certificate File Sharing")
         self.root.geometry("1100x750")
         self.root.minsize(900, 600)
+        self.root.configure(bg=self.COLORS['bg_primary'])
 
         self.core = PKIshareCore()
         self.session_key = None
@@ -25,7 +40,7 @@ class PKIshareApp:
 
         self.setup_styles()
 
-        self.main_container = ttk.Frame(root)
+        self.main_container = tk.Frame(self.root, bg=self.COLORS['bg_primary'])
         self.main_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
         self.render_auth_page()
@@ -33,10 +48,68 @@ class PKIshareApp:
     def setup_styles(self):
         style = ttk.Style()
         style.theme_use('clam')
+        
+        style.configure('Title.TLabel', 
+            font=('Segoe UI', 24, 'bold'), 
+            foreground=self.COLORS['accent'],
+            background=self.COLORS['bg_primary'])
+        
+        style.configure('Subtitle.TLabel', 
+            font=('Segoe UI', 12), 
+            foreground=self.COLORS['text_secondary'],
+            background=self.COLORS['bg_primary'])
+        
+        style.configure('Heading.TLabel', 
+            font=('Segoe UI', 14, 'bold'), 
+            foreground=self.COLORS['text_primary'],
+            background=self.COLORS['bg_secondary'])
+        
+        style.configure('Card.TLabel',
+            font=('Segoe UI', 10),
+            foreground=self.COLORS['text_secondary'],
+            background=self.COLORS['bg_secondary'])
+        
+        style.configure('Modern.TNotebook.Tab',
+            font=('Segoe UI', 10, 'bold'),
+            padding=[15, 8])
+        
+        style.configure('Treeview',
+            font=('Segoe UI', 10),
+            rowheight=32)
+        
+        style.configure('Treeview.Heading',
+            font=('Segoe UI', 10, 'bold'),
+            background=self.COLORS['border'])
 
-        style.configure('Title.TLabel', font=('Arial', 20, 'bold'), foreground='#2c3e50')
-        style.configure('Heading.TLabel', font=('Arial', 14, 'bold'))
-        style.configure('Accent.TButton', font=('Arial', 11, 'bold'))
+    def create_modern_button(self, parent, text, command, bg=None, fg='white', hover_color=None):
+        """Create a modern styled button"""
+        btn = tk.Button(
+            parent,
+            text=text,
+            command=command,
+            font=('Segoe UI', 10, 'bold'),
+            bg=bg if bg else self.COLORS['accent'],
+            fg=fg,
+            activebackground=hover_color if hover_color else self.COLORS['accent_hover'],
+            activeforeground='white',
+            relief='flat',
+            bd=0,
+            cursor='hand2',
+            padx=20,
+            pady=8,
+        )
+        return btn
+
+    def create_card(self, parent, **kwargs):
+        """Create a card-style container"""
+        card = tk.Frame(
+            parent,
+            bg=self.COLORS['bg_secondary'],
+            highlightbackground=self.COLORS['border'],
+            highlightthickness=1,
+            **kwargs
+        )
+        return card
 
     def clear_screen(self):
         for widget in self.main_container.winfo_children():
@@ -45,65 +118,88 @@ class PKIshareApp:
     def render_auth_page(self):
         self.clear_screen()
 
-        ttk.Label(self.main_container, text="PKIshare", style='Title.TLabel').pack(pady=(0, 10))
+        # Header
+        header_frame = tk.Frame(self.main_container, bg=self.COLORS['bg_primary'])
+        header_frame.pack(fill=tk.X, pady=(20, 10))
+        
+        icon_label = tk.Label(
+            header_frame,
+            text="",
+            font=('Segoe UI', 32),
+            bg=self.COLORS['bg_primary'],
+            fg=self.COLORS['accent']
+        )
+        icon_label.pack(pady=(0, 10))
+        
+        ttk.Label(self.main_container, text="PKIshare", style='Title.TLabel').pack()
         ttk.Label(
             self.main_container,
-            text="Secure Digital Certificate File Sharing System"
+            text="Secure Digital Certificate File Sharing System",
+            style='Subtitle.TLabel'
         ).pack(pady=(0, 30))
 
-        self.auth_notebook = ttk.Notebook(self.main_container)
-        self.auth_notebook.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        auth_card = self.create_card(self.main_container)
+        auth_card.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
 
-        self.login_tab = ttk.Frame(self.auth_notebook)
-        self.auth_notebook.add(self.login_tab, text="   Login   ")
+        self.auth_notebook = ttk.Notebook(auth_card)
+        self.auth_notebook.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        self.login_tab = tk.Frame(self.auth_notebook, bg=self.COLORS['bg_secondary'])
+        self.auth_notebook.add(self.login_tab, text="  Login  ")
         self.create_login_panel(self.login_tab)
 
-        self.register_tab = ttk.Frame(self.auth_notebook)
-        self.auth_notebook.add(self.register_tab, text="   Register   ")
+        self.register_tab = tk.Frame(self.auth_notebook, bg=self.COLORS['bg_secondary'])
+        self.auth_notebook.add(self.register_tab, text="  Register  ")
         self.create_register_panel(self.register_tab)
 
         self.auth_notebook.select(self.login_tab)
 
     def create_login_panel(self, parent):
-        login_frame = ttk.LabelFrame(parent, text=" Login ", padding=20)
-        login_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        login_frame = self.create_card(parent)
+        login_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
 
-        ttk.Label(login_frame, text="Username:").grid(row=0, column=0, sticky=tk.W, pady=10)
-        self.username_input = ttk.Entry(login_frame, width=40, font=('Arial', 11))
-        self.username_input.grid(row=0, column=1, pady=10, padx=(10, 0))
+        ttk.Label(login_frame, text="Welcome Back", style='Heading.TLabel').pack(anchor=tk.W, pady=(0, 20))
+        ttk.Label(login_frame, text="Username", style='Card.TLabel').pack(anchor=tk.W)
+        self.username_input = ttk.Entry(login_frame, width=45)
+        self.username_input.pack(fill=tk.X, pady=(5, 15))
 
-        ttk.Label(login_frame, text="Password:").grid(row=1, column=0, sticky=tk.W, pady=10)
-        self.password_input = ttk.Entry(login_frame, width=40, show="*", font=('Arial', 11))
-        self.password_input.grid(row=1, column=1, pady=10, padx=(10, 0))
+        ttk.Label(login_frame, text="Password", style='Card.TLabel').pack(anchor=tk.W)
+        self.password_input = ttk.Entry(login_frame, width=45, show="*")
+        self.password_input.pack(fill=tk.X, pady=(5, 20))
 
-        ttk.Button(login_frame, text="Login", command=self.execute_login).grid(row=2, column=0, columnspan=2, pady=20)
+        self.create_modern_button(
+            login_frame, "Login", self.execute_login,
+            bg=self.COLORS['accent'], hover_color=self.COLORS['accent_hover']
+        ).pack(fill=tk.X, pady=(10, 0))
 
     def create_register_panel(self, parent):
-        reg_frame = ttk.LabelFrame(parent, text=" Register New User ", padding=20)
-        reg_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        reg_frame = self.create_card(parent)
+        reg_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=30)
 
-        ttk.Label(reg_frame, text="Username:").grid(row=0, column=0, sticky=tk.W, pady=10)
-        self.reg_username = ttk.Entry(reg_frame, width=40, font=('Arial', 11))
-        self.reg_username.grid(row=0, column=1, pady=10, padx=(10, 0))
+        ttk.Label(reg_frame, text="Create Account", style='Heading.TLabel').pack(anchor=tk.W, pady=(0, 20))
+        ttk.Label(reg_frame, text="Username", style='Card.TLabel').pack(anchor=tk.W)
+        self.reg_username = ttk.Entry(reg_frame, width=45)
+        self.reg_username.pack(fill=tk.X, pady=(5, 15))
 
-        ttk.Label(reg_frame, text="Password:").grid(row=1, column=0, sticky=tk.W, pady=10)
-        self.reg_password = ttk.Entry(reg_frame, width=40, show="*", font=('Arial', 11))
-        self.reg_password.grid(row=1, column=1, pady=10, padx=(10, 0))
+        ttk.Label(reg_frame, text="Password", style='Card.TLabel').pack(anchor=tk.W)
+        self.reg_password = ttk.Entry(reg_frame, width=45, show="*")
+        self.reg_password.pack(fill=tk.X, pady=(5, 15))
 
-        ttk.Label(reg_frame, text="Confirm Password:").grid(row=2, column=0, sticky=tk.W, pady=10)
-        self.reg_confirm = ttk.Entry(reg_frame, width=40, show="*", font=('Arial', 11))
-        self.reg_confirm.grid(row=2, column=1, pady=10, padx=(10, 0))
+        ttk.Label(reg_frame, text="Confirm Password", style='Card.TLabel').pack(anchor=tk.W)
+        self.reg_confirm = ttk.Entry(reg_frame, width=45, show="*")
+        self.reg_confirm.pack(fill=tk.X, pady=(5, 20))
 
-        ttk.Button(reg_frame, text="Register", command=self.handle_registration).grid(row=3, column=0, columnspan=2, pady=20)
+        self.create_modern_button(
+            reg_frame, "Create Account", self.handle_registration,
+            bg=self.COLORS['accent'], hover_color=self.COLORS['accent_hover']
+        ).pack(fill=tk.X, pady=(10, 0))
 
     def execute_login(self):
         username = self.username_input.get().strip()
         password = self.password_input.get()
-
         if not username or not password:
             messagebox.showerror("Error", "Please enter username and password")
             return
-
         if self.core.authenticate_user(username, password):
             self.session_key = password
             self.share_key = None
@@ -117,7 +213,6 @@ class PKIshareApp:
         username = self.reg_username.get().strip()
         pwd1 = self.reg_password.get()
         pwd2 = self.reg_confirm.get()
-
         if not username or not pwd1:
             messagebox.showerror("Error", "All fields are required")
             return
@@ -127,22 +222,29 @@ class PKIshareApp:
         if len(pwd1) < 8:
             messagebox.showerror("Error", "Password must be at least 8 characters")
             return
-
         if self.core.create_user_account(username, pwd1):
             messagebox.showinfo("Success", f"User '{username}' registered successfully!")
             self.reg_username.delete(0, tk.END)
             self.reg_password.delete(0, tk.END)
             self.reg_confirm.delete(0, tk.END)
+            self.auth_notebook.select(self.login_tab)
+            self.username_input.focus_set()
         else:
             messagebox.showerror("Error", "Username already exists")
 
     def display_dashboard(self):
         self.clear_screen()
 
-        header = ttk.Frame(self.main_container)
+        header = tk.Frame(self.main_container, bg=self.COLORS['bg_primary'])
         header.pack(fill=tk.X, pady=(0, 20))
-        ttk.Label(header, text=f"Welcome, {self.core.current_username}!", style='Title.TLabel').pack(side=tk.LEFT)
-        ttk.Button(header, text="Logout", command=self.terminate_session).pack(side=tk.RIGHT)
+
+        welcome_frame = tk.Frame(header, bg=self.COLORS['bg_primary'])
+        welcome_frame.pack(side=tk.LEFT)
+        ttk.Label(welcome_frame, text=f"Welcome, {self.core.current_username}!", style='Title.TLabel').pack(anchor=tk.W)
+
+        btn_frame = tk.Frame(header, bg=self.COLORS['bg_primary'])
+        btn_frame.pack(side=tk.RIGHT)
+        self.create_modern_button(btn_frame, "Logout", self.terminate_session, bg=self.COLORS['error'], hover_color='#c0392b').pack()
 
         notebook = ttk.Notebook(self.main_container)
         notebook.pack(fill=tk.BOTH, expand=True, pady=10)
@@ -154,32 +256,44 @@ class PKIshareApp:
         self.setup_cert_panel(notebook)
 
     def setup_share_panel(self, notebook):
-        tab = ttk.Frame(notebook)
-        notebook.add(tab, text="Share File")
+        tab = tk.Frame(notebook, bg=self.COLORS['bg_secondary'])
+        notebook.add(tab, text="  Share File  ")
 
-        file_frame = ttk.LabelFrame(tab, text="Select File to Share", padding=15)
-        file_frame.pack(fill=tk.X, padx=20, pady=15)
+        main_card = self.create_card(tab)
+        main_card.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+
+        file_frame = self.create_card(main_card)
+        file_frame.pack(fill=tk.X, padx=15, pady=15)
+        ttk.Label(file_frame, text="Select File to Share", style='Card.TLabel').pack(anchor=tk.W, pady=(0, 10))
+
+        file_input_frame = tk.Frame(file_frame, bg=self.COLORS['bg_secondary'])
+        file_input_frame.pack(fill=tk.X)
         self.target_path_var = tk.StringVar()
-        ttk.Entry(file_frame, textvariable=self.target_path_var, width=70).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
-        ttk.Button(file_frame, text="Browse...", command=self.select_file_dialog).pack(side=tk.RIGHT)
+        ttk.Entry(file_input_frame, textvariable=self.target_path_var, width=70).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+        self.create_modern_button(file_input_frame, "Browse", self.select_file_dialog, bg=self.COLORS['text_secondary']).pack(side=tk.RIGHT)
 
-        recip_frame = ttk.LabelFrame(tab, text="Select Recipients", padding=15)
-        recip_frame.pack(fill=tk.X, padx=20, pady=15)
+        recip_frame = self.create_card(main_card)
+        recip_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
+        ttk.Label(recip_frame, text="Select Recipients", style='Card.TLabel').pack(anchor=tk.W, pady=(0, 10))
 
         all_users = self.core.get_all_users()
         others = [u for u in all_users if u != self.core.current_username]
         self.recipient_states = {}
 
         if others:
+            recip_grid = tk.Frame(recip_frame, bg=self.COLORS['bg_secondary'])
+            recip_grid.pack(fill=tk.X)
             for i, user in enumerate(others):
                 var = tk.BooleanVar()
-                chk = ttk.Checkbutton(recip_frame, text=user, variable=var)
-                chk.grid(row=i // 4, column=i % 4, sticky=tk.W, padx=15, pady=5)
+                chk = tk.Checkbutton(recip_grid, text=user, variable=var, font=('Segoe UI', 10),
+                    bg=self.COLORS['bg_secondary'], fg=self.COLORS['text_primary'],
+                    activebackground=self.COLORS['bg_secondary'], selectcolor=self.COLORS['bg_secondary'])
+                chk.grid(row=i // 3, column=i % 3, sticky=tk.W, padx=10, pady=5)
                 self.recipient_states[user] = var
         else:
-            ttk.Label(recip_frame, text="No other registered users", foreground="gray").pack(pady=10)
+            ttk.Label(recip_frame, text="No other registered users", style='Card.TLabel', foreground=self.COLORS['text_light']).pack(pady=10)
 
-        ttk.Button(tab, text="Encrypt & Share File", command=self.initiate_file_share).pack(pady=25)
+        self.create_modern_button(main_card, "Encrypt & Share File", self.initiate_file_share, bg=self.COLORS['accent']).pack(pady=(0, 15))
 
     def select_file_dialog(self):
         filepath = filedialog.askopenfilename(title="Choose a file to share")
@@ -191,12 +305,10 @@ class PKIshareApp:
         if not filepath or not Path(filepath).exists():
             messagebox.showerror("Error", "Please select a valid file")
             return
-
         recipients = [user for user, var in self.recipient_states.items() if var.get()]
         if not recipients:
             messagebox.showerror("Error", "Please select at least one recipient")
             return
-
         if self.core.distribute_file(filepath, recipients, self.session_key):
             messagebox.showinfo("Success", f"File shared with: {', '.join(recipients)}")
             self.target_path_var.set("")
@@ -207,58 +319,51 @@ class PKIshareApp:
             messagebox.showerror("Error", "Failed to share file")
 
     def setup_files_panel(self, notebook):
-        tab = ttk.Frame(notebook)
-        notebook.add(tab, text="My Files")
+        tab = tk.Frame(notebook, bg=self.COLORS['bg_secondary'])
+        notebook.add(tab, text="  My Files  ")
 
-        top_frame = ttk.Frame(tab)
-        top_frame.pack(fill=tk.X, padx=20, pady=10)
-        ttk.Button(top_frame, text="Refresh", command=self.update_files_view).pack(side=tk.RIGHT)
+        main_card = self.create_card(tab)
+        main_card.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
 
-        tree_frame = ttk.Frame(tab)
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        top_bar = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        top_bar.pack(fill=tk.X, padx=15, pady=15)
+        ttk.Label(top_bar, text="Shared Files", style='Heading.TLabel').pack(side=tk.LEFT)
+        self.create_modern_button(top_bar, "Refresh", self.update_files_view, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.RIGHT)
 
+        tree_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=15)
         columns = ("ID", "Filename", "Owner", "Recipients", "Date")
         self.files_view = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
         for col, width in zip(columns, [120, 250, 120, 250, 130]):
             self.files_view.heading(col, text=col)
             self.files_view.column(col, width=width, anchor=tk.W if col != "Date" else tk.CENTER)
-
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.files_view.yview)
         self.files_view.configure(yscrollcommand=scrollbar.set)
         self.files_view.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        action_frame = ttk.Frame(tab)
-        action_frame.pack(fill=tk.X, padx=20, pady=15)
-        ttk.Button(action_frame, text="Download Selected", command=self.process_file_download).pack(side=tk.LEFT, padx=10)
-        ttk.Button(action_frame, text="Revoke Access", command=self.revoke_file_access).pack(side=tk.LEFT, padx=10)
+        action_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        action_frame.pack(fill=tk.X, padx=15, pady=15)
+        self.create_modern_button(action_frame, "Download", self.process_file_download, bg=self.COLORS['success']).pack(side=tk.LEFT, padx=(0, 10))
+        self.create_modern_button(action_frame, "Revoke Access", self.revoke_file_access, bg=self.COLORS['error']).pack(side=tk.LEFT)
 
         self.update_files_view()
 
     def update_files_view(self):
         for item in self.files_view.get_children():
             self.files_view.delete(item)
-
         files = self.core.fetch_shared_collection()
         for ef in files:
             recipients = []
-            # Get file keys to determine recipients
             file_keys = self.core.db.get_file_keys(ef["id"])
             for k in file_keys:
                 if k["user_id"] != ef["owner_id"]:
                     recipients.append(k.get("username", ""))
-            
             recip_str = "(Only me)" if not recipients else ", ".join(recipients[:4])
             if len(recipients) > 4:
                 recip_str += "..."
-
             self.files_view.insert("", tk.END, iid=ef["file_id"], values=(
-                ef["file_id"][:15] + "...",
-                ef["filename"],
-                ef.get("owner_name", "Unknown"),
-                recip_str,
-                ef["timestamp"][:10]
-            ))
+                ef["file_id"][:15] + "...", ef["filename"], ef.get("owner_name", "Unknown"), recip_str, ef["timestamp"][:10]))
 
     def process_file_download(self):
         selection = self.files_view.selection()
@@ -267,15 +372,12 @@ class PKIshareApp:
             return
         file_id = selection[0]
         file_data = self.core.db.get_file_by_id(file_id)
-
         if not file_data:
             messagebox.showerror("Error", "File not found")
             return
-
         save_path = filedialog.asksaveasfilename(title="Save decrypted file as", initialfile=file_data["filename"])
         if not save_path:
             return
-
         if self.core.retrieve_file(file_id, save_path, self.session_key):
             messagebox.showinfo("Success", "File downloaded and decrypted successfully!")
         else:
@@ -288,11 +390,9 @@ class PKIshareApp:
             return
         file_id = selection[0]
         file_data = self.core.db.get_file_by_id(file_id)
-
         if not file_data:
             messagebox.showerror("Error", "File not found")
             return
-
         if file_data["owner_id"] != self.core.current_user_id:
             messagebox.showerror("Error", "Only the file owner can revoke access")
             return
@@ -302,31 +402,34 @@ class PKIshareApp:
         dialog.geometry("500x450")
         dialog.transient(self.root)
         dialog.grab_set()
+        dialog.configure(bg=self.COLORS['bg_primary'])
 
-        ttk.Label(dialog, text=f"Manage access to '{file_data['filename']}:", font=('Arial', 12, 'bold')).pack(pady=15)
-
-        current_frame = ttk.LabelFrame(dialog, text=" Current Access ", padding=10)
+        ttk.Label(dialog, text=f"Manage access to '{file_data['filename']}'", style='Heading.TLabel').pack(pady=20)
+        current_frame = self.create_card(dialog)
         current_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Label(current_frame, text="Current Access", style='Card.TLabel').pack(anchor=tk.W, pady=(0, 10))
 
         revoke_vars = {}
         file_keys = self.core.db.get_file_keys(file_data["id"])
         for k in file_keys:
             if k["user_id"] != self.core.current_user_id:
                 var = tk.BooleanVar()
-                ttk.Checkbutton(current_frame, text=f"{k.get('username', 'Unknown')} (has access)", variable=var).pack(anchor=tk.W, padx=10, pady=2)
+                chk = tk.Checkbutton(current_frame, text=f"{k.get('username', 'Unknown')} (has access)", variable=var,
+                    font=('Segoe UI', 10), bg=self.COLORS['bg_secondary'], fg=self.COLORS['text_primary'],
+                    activebackground=self.COLORS['bg_secondary'], selectcolor=self.COLORS['bg_secondary'])
+                chk.pack(anchor=tk.W, padx=10, pady=2)
                 revoke_vars[k["user_id"]] = var
 
         if not revoke_vars:
-            ttk.Label(current_frame, text="No other users have access", foreground='gray').pack(anchor=tk.W, padx=10)
+            ttk.Label(current_frame, text="No other users have access", style='Card.TLabel', foreground=self.COLORS['text_light']).pack(anchor=tk.W, padx=10)
 
-        button_frame = ttk.Frame(dialog)
+        button_frame = tk.Frame(dialog, bg=self.COLORS['bg_primary'])
         button_frame.pack(pady=20)
 
         def perform_revoke():
             revoked = []
             for user_id, var in revoke_vars.items():
                 if var.get():
-                    # Get username
                     user = self.core.db.get_user_by_id(user_id)
                     if user and self.core.remove_file_access(file_id, user["username"]):
                         revoked.append(user["username"])
@@ -334,23 +437,25 @@ class PKIshareApp:
             dialog.destroy()
             self.update_files_view()
 
-        ttk.Button(button_frame, text="Revoke Selected", command=perform_revoke).pack(side=tk.LEFT, padx=10)
-        ttk.Button(button_frame, text="Close", command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+        self.create_modern_button(button_frame, "Revoke Selected", perform_revoke, bg=self.COLORS['error']).pack(side=tk.LEFT, padx=10)
+        self.create_modern_button(button_frame, "Close", dialog.destroy, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.LEFT, padx=10)
 
     def setup_users_panel(self, notebook):
-        tab = ttk.Frame(notebook)
-        notebook.add(tab, text="Users")
+        tab = tk.Frame(notebook, bg=self.COLORS['bg_secondary'])
+        notebook.add(tab, text="  Users  ")
 
-        frame = ttk.LabelFrame(tab, text="Registered Users", padding=20)
-        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        main_card = self.create_card(tab)
+        main_card.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+        ttk.Label(main_card, text="Registered Users", style='Heading.TLabel').pack(anchor=tk.W, padx=15, pady=15)
 
+        frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
         columns = ("Status", "Username")
         tree = ttk.Treeview(frame, columns=columns, show="headings", height=15)
         tree.heading("Status", text="")
         tree.heading("Username", text="Username")
         tree.column("Status", width=60, anchor=tk.CENTER)
         tree.column("Username", width=200, anchor=tk.W)
-
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=scrollbar.set)
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -361,11 +466,9 @@ class PKIshareApp:
             tree.insert("", tk.END, values=(status, user))
 
     def setup_share_panel_main(self, notebook):
-        tab = ttk.Frame(notebook)
-        notebook.add(tab, text="Shared Repository")
-
+        tab = tk.Frame(notebook, bg=self.COLORS['bg_secondary'])
+        notebook.add(tab, text="  Shared Repository  ")
         has_share_password = self.core.check_share_protection(self.core.current_username)
-
         if not has_share_password:
             self._render_set_share_password(tab)
         elif not self.share_unlocked:
@@ -374,18 +477,17 @@ class PKIshareApp:
             self._build_share_interface(tab)
 
     def _render_set_share_password(self, parent):
-        prompt_frame = ttk.Frame(parent)
-        prompt_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=40)
-
-        ttk.Label(prompt_frame, text="Set Share Password", font=('Arial', 18, 'bold'), foreground='#3498db').pack(pady=(0, 10))
-        ttk.Label(prompt_frame, text="Set a password to protect your shared files", font=('Arial', 11), foreground='#7f8c8d').pack(pady=(0, 20))
-
-        ttk.Label(prompt_frame, text="Share Password:").pack(pady=(10, 5))
-        share_pwd_entry = ttk.Entry(prompt_frame, width=30, show="*", font=('Arial', 11))
+        prompt_frame = tk.Frame(parent, bg=self.COLORS['bg_secondary'])
+        prompt_frame.pack(fill=tk.BOTH, expand=True)
+        card = self.create_card(prompt_frame)
+        card.pack(expand=True, padx=100, pady=80)
+        ttk.Label(card, text="Set Share Password", style='Heading.TLabel').pack(pady=(0, 10))
+        ttk.Label(card, text="Set a password to protect your shared files", style='Card.TLabel').pack(pady=(0, 20))
+        ttk.Label(card, text="Share Password:", style='Card.TLabel').pack()
+        share_pwd_entry = ttk.Entry(card, width=30, show="*", font=('Segoe UI', 11))
         share_pwd_entry.pack(pady=5)
-
-        ttk.Label(prompt_frame, text="Confirm Password:").pack(pady=(5, 5))
-        share_confirm_entry = ttk.Entry(prompt_frame, width=30, show="*", font=('Arial', 11))
+        ttk.Label(card, text="Confirm Password:", style='Card.TLabel').pack()
+        share_confirm_entry = ttk.Entry(card, width=30, show="*", font=('Segoe UI', 11))
         share_confirm_entry.pack(pady=5)
 
         def save_password():
@@ -402,17 +504,17 @@ class PKIshareApp:
                     widget.destroy()
                 self._build_share_interface(parent)
 
-        ttk.Button(prompt_frame, text="Set Password", command=save_password).pack(pady=20)
+        self.create_modern_button(card, "Set Password", save_password, bg=self.COLORS['accent']).pack(pady=25)
 
     def _render_share_password_prompt(self, parent):
-        prompt_frame = ttk.Frame(parent)
-        prompt_frame.pack(fill=tk.BOTH, expand=True, padx=40, pady=40)
-
-        ttk.Label(prompt_frame, text="Shared Repository Locked", font=('Arial', 18, 'bold'), foreground='#e74c3c').pack(pady=(0, 10))
-        ttk.Label(prompt_frame, text="Enter your share password", font=('Arial', 11), foreground='#7f8c8d').pack(pady=(0, 20))
-
-        ttk.Label(prompt_frame, text="Share Password:").pack(pady=(10, 5))
-        share_pwd_entry = ttk.Entry(prompt_frame, width=30, show="*", font=('Arial', 11))
+        prompt_frame = tk.Frame(parent, bg=self.COLORS['bg_secondary'])
+        prompt_frame.pack(fill=tk.BOTH, expand=True)
+        card = self.create_card(prompt_frame)
+        card.pack(expand=True, padx=100, pady=80)
+        ttk.Label(card, text="Shared Repository Locked", style='Heading.TLabel').pack(pady=(0, 10))
+        ttk.Label(card, text="Enter your share password", style='Card.TLabel').pack(pady=(0, 20))
+        ttk.Label(card, text="Share Password:", style='Card.TLabel').pack()
+        share_pwd_entry = ttk.Entry(card, width=30, show="*", font=('Segoe UI', 11))
         share_pwd_entry.pack(pady=5)
 
         def verify_password():
@@ -425,50 +527,53 @@ class PKIshareApp:
             else:
                 messagebox.showerror("Error", "Incorrect share password")
 
-        ttk.Button(prompt_frame, text="Unlock", command=verify_password).pack(pady=20)
+        self.create_modern_button(card, "Unlock", verify_password, bg=self.COLORS['success']).pack(pady=25)
 
     def _build_share_interface(self, parent):
-        top_frame = ttk.Frame(parent)
-        top_frame.pack(fill=tk.X, padx=20, pady=20)
-        ttk.Button(top_frame, text="Change Password", command=self.modify_share_password).pack(side=tk.RIGHT, padx=5)
+        main_card = self.create_card(parent)
+        main_card.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
 
-        add_frame = ttk.LabelFrame(parent, text=" Add to Repository ", padding=15)
-        add_frame.pack(fill=tk.X, padx=20, pady=(0, 15))
+        top_bar = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        top_bar.pack(fill=tk.X, padx=15, pady=15)
+        ttk.Label(top_bar, text="Shared Repository", style='Heading.TLabel').pack(side=tk.LEFT)
+        self.create_modern_button(top_bar, "Change Password", self.modify_share_password, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.RIGHT, padx=5)
 
+        add_frame = self.create_card(main_card)
+        add_frame.pack(fill=tk.X, padx=15, pady=(0, 15))
+        ttk.Label(add_frame, text="Add to Repository", style='Card.TLabel').pack(anchor=tk.W, pady=(0, 10))
+        input_row = tk.Frame(add_frame, bg=self.COLORS['bg_secondary'])
+        input_row.pack(fill=tk.X)
         self.share_file_path_var = tk.StringVar()
-        ttk.Entry(add_frame, textvariable=self.share_file_path_var, width=60).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
-        ttk.Button(add_frame, text="Browse...", command=self.select_share_file).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(add_frame, text="Encrypt & Store", command=self.store_in_share).pack(side=tk.LEFT)
+        ttk.Entry(input_row, textvariable=self.share_file_path_var, width=60).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 10))
+        self.create_modern_button(input_row, "Browse", self.select_share_file, bg=self.COLORS['text_secondary']).pack(side=tk.LEFT, padx=(0, 10))
+        self.create_modern_button(input_row, "Encrypt & Store", self.store_in_share, bg=self.COLORS['success']).pack(side=tk.LEFT)
 
-        list_frame = ttk.LabelFrame(parent, text=" My Shared Files ", padding=15)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+        list_card = self.create_card(main_card)
+        list_card.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+        top_list = tk.Frame(list_card, bg=self.COLORS['bg_secondary'])
+        top_list.pack(fill=tk.X, padx=15, pady=15)
+        ttk.Label(top_list, text="My Shared Files", style='Card.TLabel').pack(side=tk.LEFT)
+        self.create_modern_button(top_list, "Refresh", self.refresh_share_view, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.RIGHT)
 
-        top_list_frame = ttk.Frame(list_frame)
-        top_list_frame.pack(fill=tk.X, pady=(0, 10))
-        ttk.Button(top_list_frame, text="Refresh", command=self.refresh_share_view).pack(side=tk.RIGHT)
-
-        tree_frame = ttk.Frame(list_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True)
-
+        tree_frame = tk.Frame(list_card, bg=self.COLORS['bg_secondary'])
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=15)
         columns = ("Filename", "Size", "Date", "ID")
         self.share_view = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
         for col, width in zip(columns, [250, 100, 130, 150]):
             self.share_view.heading(col, text=col)
             self.share_view.column(col, width=width, anchor=tk.W if col != "Size" and col != "Date" else tk.CENTER)
-
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.share_view.yview)
         self.share_view.configure(yscrollcommand=scrollbar.set)
         self.share_view.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        action_frame = ttk.Frame(list_frame)
-        action_frame.pack(fill=tk.X, pady=15)
-        ttk.Button(action_frame, text="Download Selected", command=self.download_share_file).pack(side=tk.LEFT, padx=10)
-        ttk.Button(action_frame, text="Delete Selected", command=self.remove_share_file).pack(side=tk.LEFT, padx=10)
+        action_frame = tk.Frame(list_card, bg=self.COLORS['bg_secondary'])
+        action_frame.pack(fill=tk.X, padx=15, pady=15)
+        self.create_modern_button(action_frame, "Download", self.download_share_file, bg=self.COLORS['success']).pack(side=tk.LEFT, padx=(0, 10))
+        self.create_modern_button(action_frame, "Delete", self.remove_share_file, bg=self.COLORS['error']).pack(side=tk.LEFT)
 
-        self.share_info_label = ttk.Label(list_frame, text="", font=('Arial', 10), foreground='#7f8c8d')
-        self.share_info_label.pack(pady=(10, 0))
-
+        self.share_info_label = ttk.Label(list_card, text="", font=('Segoe UI', 10), foreground=self.COLORS['text_secondary'], background=self.COLORS['bg_secondary'])
+        self.share_info_label.pack(pady=(0, 15))
         self.refresh_share_view()
 
     def select_share_file(self):
@@ -491,20 +596,12 @@ class PKIshareApp:
     def refresh_share_view(self):
         for item in self.share_view.get_children():
             self.share_view.delete(item)
-
         files = self.core.list_share_contents()
         total_size = 0
-
         for sf in files:
             size_str = self._format_size(sf.get("size", 0))
             total_size += sf.get("size", 0)
-            self.share_view.insert("", tk.END, iid=sf["share_id"], values=(
-                sf["filename"],
-                size_str,
-                sf["timestamp"][:10],
-                sf["share_id"][:20] + "..."
-            ))
-
+            self.share_view.insert("", tk.END, iid=sf["share_id"], values=(sf["filename"], size_str, sf["timestamp"][:10], sf["share_id"][:20] + "..."))
         self.share_info_label.config(text=f"Total files: {len(files)} | Total size: {self._format_size(total_size)}")
 
     def _format_size(self, size):
@@ -521,15 +618,12 @@ class PKIshareApp:
             return
         share_id = selection[0]
         sf = self.core.db.get_shared_file_by_id(share_id)
-
         if not sf:
             messagebox.showerror("Error", "File not found")
             return
-
         save_path = filedialog.asksaveasfilename(title="Save decrypted file as", initialfile=sf["filename"])
         if not save_path:
             return
-
         if self.core.extract_from_share(share_id, save_path, self.session_key):
             messagebox.showinfo("Success", "File downloaded successfully!")
         else:
@@ -542,11 +636,9 @@ class PKIshareApp:
             return
         share_id = selection[0]
         sf = self.core.db.get_shared_file_by_id(share_id)
-
         if not sf:
             messagebox.showerror("Error", "File not found")
             return
-
         if messagebox.askyesno("Confirm", f"Delete '{sf['filename']}'?"):
             if self.core.remove_from_share(share_id):
                 messagebox.showinfo("Success", "File deleted")
@@ -558,15 +650,12 @@ class PKIshareApp:
         dialog.geometry("400x300")
         dialog.transient(self.root)
         dialog.grab_set()
-
-        ttk.Label(dialog, text="Change Share Password", font=('Arial', 14, 'bold'), foreground='#3498db').pack(pady=20)
-
+        ttk.Label(dialog, text="Change Share Password", font=('Segoe UI', 14, 'bold'), foreground=self.COLORS['accent']).pack(pady=20)
         ttk.Label(dialog, text="Current Password:").pack(pady=5)
-        current_pwd = ttk.Entry(dialog, width=30, show="*", font=('Arial', 11))
+        current_pwd = ttk.Entry(dialog, width=30, show="*")
         current_pwd.pack(pady=5)
-
         ttk.Label(dialog, text="New Password:").pack(pady=5)
-        new_pwd = ttk.Entry(dialog, width=30, show="*", font=('Arial', 11))
+        new_pwd = ttk.Entry(dialog, width=30, show="*")
         new_pwd.pack(pady=5)
 
         def save_new_password():
@@ -580,24 +669,14 @@ class PKIshareApp:
         ttk.Button(dialog, text="Save New Password", command=save_new_password).pack(pady=20)
 
     def setup_cert_panel(self, notebook):
-        tab = ttk.Frame(notebook)
-        notebook.add(tab, text="Your Certificate")
-
+        tab = tk.Frame(notebook, bg=self.COLORS['bg_secondary'])
+        notebook.add(tab, text="  Your Certificate  ")
         cert = self.core.get_certificate()
-
         if cert:
-            info = (
-                f"Certificate (PKIshare)\n"
-                f"Subject: {cert['subject']}\n"
-                f"Serial: {cert['serial']}\n"
-                f"Issuer: {cert['issuer']}\n"
-                f"Valid From: {cert['valid_from'][:10]}\n"
-                f"Valid To: {cert['valid_to'][:10]}\n"
-                f"Status: VALID\n"
-            )
+            info = (f"Certificate (PKIshare)\n" f"Subject: {cert['subject']}\n" f"Serial: {cert['serial']}\n"
+                f"Issuer: {cert['issuer']}\n" f"Valid From: {cert['valid_from'][:10]}\n" f"Valid To: {cert['valid_to'][:10]}\n" f"Status: VALID\n")
         else:
             info = "No certificate found"
-
         label = ttk.Label(tab, text=info, font=('Courier', 10), background="#f0f0f0", relief="groove", padding=30)
         label.pack(padx=40, pady=40, fill=tk.X)
 
@@ -608,7 +687,4 @@ class PKIshareApp:
         self.share_key = None
         self.share_unlocked = False
         self.render_auth_page()
-
-
-# Ensure newline at end of file
 
