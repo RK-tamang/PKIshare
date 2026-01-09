@@ -290,6 +290,28 @@ class PKIshareCore:
         users = self.db.get_all_users()
         return [u["username"] for u in users]
     
+    def delete_account(self, password: str) -> bool:
+        """Delete the current user's account. Requires password confirmation."""
+        if not self.current_user_id:
+            return False
+        
+        user = self.db.get_user_by_id(self.current_user_id)
+        if not user:
+            return False
+        
+        # Verify password
+        expected_hash = hashlib.sha256(password.encode()).hexdigest()
+        if user["password_hash"] != expected_hash:
+            return False
+        
+        # Delete the user account (cascades to files, keys, certificates)
+        success = self.db.delete_user(self.current_user_id)
+        if success:
+            self.current_user_id = None
+            self.current_username = None
+            self.session_key = None
+        return success
+    
     # ==================== SHARE PASSWORD METHODS ====================
     def check_share_protection(self, username: str) -> bool:
         """Check if user has set a share password."""

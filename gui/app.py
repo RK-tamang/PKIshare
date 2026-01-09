@@ -244,7 +244,18 @@ class PKIshareApp:
 
         btn_frame = tk.Frame(header, bg=self.COLORS['bg_primary'])
         btn_frame.pack(side=tk.RIGHT)
-        self.create_modern_button(btn_frame, "Logout", self.terminate_session, bg=self.COLORS['error'], hover_color='#c0392b').pack()
+        
+        # Delete My Account button - visible by default in header
+        self.create_modern_button(
+            btn_frame, "🗑️ Delete My Account", self.delete_my_account,
+            bg=self.COLORS['error'], hover_color='#c0392b'
+        ).pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Logout button
+        self.create_modern_button(
+            btn_frame, "Logout", self.terminate_session,
+            bg=self.COLORS['accent'], hover_color=self.COLORS['accent_hover']
+        ).pack(side=tk.LEFT)
 
         notebook = ttk.Notebook(self.main_container)
         notebook.pack(fill=tk.BOTH, expand=True, pady=10)
@@ -664,6 +675,65 @@ class PKIshareApp:
         for user in sorted(self.core.get_all_users()):
             status = "You" if user == self.core.current_username else ""
             tree.insert("", tk.END, values=(status, user))
+
+        # Delete account button at bottom
+        delete_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
+        delete_frame.pack(fill=tk.X, padx=15, pady=15)
+        self.create_modern_button(
+            delete_frame, "Delete My Account", self.delete_my_account,
+            bg=self.COLORS['error'], hover_color='#c0392b'
+        ).pack(side=tk.RIGHT)
+
+    def delete_my_account(self):
+        """Open dialog to confirm and delete the current user's account."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Delete Account")
+        dialog.geometry("450x350")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.configure(bg=self.COLORS['bg_primary'])
+
+        ttk.Label(dialog, text="Delete My Account", style='Heading.TLabel').pack(pady=20)
+
+        warning_frame = self.create_card(dialog)
+        warning_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Label(
+            warning_frame,
+            text="⚠️ WARNING: This action cannot be undone!\n\nAll your files, certificates, and data will be permanently deleted.",
+            style='Card.TLabel',
+            foreground=self.COLORS['error']
+        ).pack(pady=15, padx=10)
+
+        # Username confirmation
+        username_frame = self.create_card(dialog)
+        username_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Label(username_frame, text=f"Type your username '{self.core.current_username}' to confirm:", 
+                  style='Card.TLabel').pack(anchor=tk.W, pady=(0, 10))
+        username_entry = ttk.Entry(username_frame, width=40, font=('Segoe UI', 11))
+        username_entry.pack(fill=tk.X)
+
+        button_frame = tk.Frame(dialog, bg=self.COLORS['bg_primary'])
+        button_frame.pack(pady=20)
+
+        def confirm_delete():
+            entered_username = username_entry.get().strip()
+            if entered_username != self.core.current_username:
+                messagebox.showerror("Error", "Username does not match. Account deletion cancelled.")
+                return
+            
+            if messagebox.askyesno("Final Confirmation", 
+                                   f"Are you absolutely sure you want to delete your account '{self.core.current_username}'?\n\nThis will permanently delete:\n- All your shared files\n- Your digital certificate\n- Your account data\n\nTHIS ACTION CANNOT BE UNDONE!"):
+                if self.core.delete_account(self.session_key):
+                    messagebox.showinfo("Account Deleted", "Your account has been permanently deleted.")
+                    dialog.destroy()
+                    self.terminate_session()
+                else:
+                    messagebox.showerror("Error", "Failed to delete account. Please try again.")
+
+        self.create_modern_button(button_frame, "Delete My Account", confirm_delete, 
+                                  bg=self.COLORS['error'], hover_color='#c0392b').pack(side=tk.LEFT, padx=10)
+        self.create_modern_button(button_frame, "Cancel", dialog.destroy,
+                                  bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.LEFT, padx=10)
 
     def setup_share_panel_main(self, notebook):
         tab = tk.Frame(notebook, bg=self.COLORS['bg_secondary'])

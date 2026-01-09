@@ -306,6 +306,14 @@ class DatabaseManager:
             ).fetchall()
             return [dict(row) for row in rows]
     
+    def delete_user(self, user_id: int) -> bool:
+        """Delete a user and all their data (files, certificates, etc.)."""
+        with self._get_connection() as conn:
+            # Delete will cascade due to foreign key constraints
+            result = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            conn.commit()
+            return result.rowcount > 0
+    
     def close(self):
         """Close database connection (for connection pooling if needed)."""
         pass
