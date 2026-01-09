@@ -345,7 +345,8 @@ class PKIshareApp:
         action_frame = tk.Frame(main_card, bg=self.COLORS['bg_secondary'])
         action_frame.pack(fill=tk.X, padx=15, pady=15)
         self.create_modern_button(action_frame, "Download", self.process_file_download, bg=self.COLORS['success']).pack(side=tk.LEFT, padx=(0, 10))
-        self.create_modern_button(action_frame, "Revoke Access", self.revoke_file_access, bg=self.COLORS['error']).pack(side=tk.LEFT)
+        self.create_modern_button(action_frame, "Revoke Access", self.revoke_file_access, bg=self.COLORS['error']).pack(side=tk.LEFT, padx=(0, 10))
+        self.create_modern_button(action_frame, "Grant Access", self.grant_file_access_dialog, bg=self.COLORS['accent']).pack(side=tk.LEFT)
 
         self.update_files_view()
 
@@ -438,6 +439,75 @@ class PKIshareApp:
             self.update_files_view()
 
         self.create_modern_button(button_frame, "Revoke Selected", perform_revoke, bg=self.COLORS['error']).pack(side=tk.LEFT, padx=10)
+        self.create_modern_button(button_frame, "Close", dialog.destroy, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.LEFT, padx=10)
+
+    def grant_file_access_dialog(self):
+        """Open dialog to grant access to a previously revoked user."""
+        selection = self.files_view.selection()
+        if not selection:
+            messagebox.showerror("Error", "Please select a file")
+            return
+        file_id = selection[0]
+        file_data = self.core.db.get_file_by_id(file_id)
+        if not file_data:
+            messagebox.showerror("Error", "File not found")
+            return
+        if file_data["owner_id"] != self.core.current_user_id:
+            messagebox.showerror("Error", "Only the file owner can grant access")
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Grant Access")
+        dialog.geometry("450x400")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.configure(bg=self.COLORS['bg_primary'])
+
+        ttk.Label(dialog, text=f"Grant access to '{file_data['filename']}'", style='Heading.TLabel').pack(pady=20)
+
+        # Get list of users who don't have access
+        all_users = self.core.get_all_users()
+        file_keys = self.core.db.get_file_keys(file_data["id"])
+        users_with_access = [k["user_id"] for k in file_keys]
+        users_without_access = [u for u in all_users if self.core.get_user_id_by_username(u) not in users_with_access and u != self.core.current_username]
+
+        if not users_without_access:
+            ttk.Label(dialog, text="All users already have access", style='Card.TLabel', foreground=self.COLORS['text_light']).pack(pady=20)
+            button_frame = tk.Frame(dialog, bg=self.COLORS['bg_primary'])
+            button_frame.pack(pady=20)
+            self.create_modern_button(button_frame, "Close", dialog.destroy, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack()
+            return
+
+        grant_frame = self.create_card(dialog)
+        grant_frame.pack(fill=tk.X, padx=20, pady=10)
+        ttk.Label(grant_frame, text="Grant Access To", style='Card.TLabel').pack(anchor=tk.W, pady=(0, 10))
+
+        grant_vars = {}
+        grant_grid = tk.Frame(grant_frame, bg=self.COLORS['bg_secondary'])
+        grant_grid.pack(fill=tk.X)
+
+        for i, user in enumerate(users_without_access):
+            var = tk.BooleanVar()
+            chk = tk.Checkbutton(grant_grid, text=user, variable=var, font=('Segoe UI', 10),
+                bg=self.COLORS['bg_secondary'], fg=self.COLORS['text_primary'],
+                activebackground=self.COLORS['bg_secondary'], selectcolor=self.COLORS['bg_secondary'])
+            chk.grid(row=i // 2, column=i % 2, sticky=tk.W, padx=10, pady=5)
+            grant_vars[user] = var
+
+        button_frame = tk.Frame(dialog, bg=self.COLORS['bg_primary'])
+        button_frame.pack(pady=20)
+
+        def perform_grant():
+            granted = []
+            for username, var in grant_vars.items():
+                if var.get():
+                    if self.core.grant_file_access(file_id, username, self.session_key):
+                        granted.append(username)
+            messagebox.showinfo("Success", f"Access granted to: {', '.join(granted) if granted else 'none'}")
+            dialog.destroy()
+            self.update_files_view()
+
+        self.create_modern_button(button_frame, "Grant Selected", perform_grant, bg=self.COLORS['success']).pack(side=tk.LEFT, padx=10)
         self.create_modern_button(button_frame, "Close", dialog.destroy, bg=self.COLORS['border'], fg=self.COLORS['text_primary']).pack(side=tk.LEFT, padx=10)
 
     def setup_users_panel(self, notebook):
