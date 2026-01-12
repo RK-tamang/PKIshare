@@ -1,6 +1,5 @@
 # PKIshare - Secure Digital Certificate and File Sharing System
 # gui/app.py
-
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
