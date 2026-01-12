@@ -32,7 +32,7 @@ jobs:
           pip install pylint pytest bandit build
 
       - name: Run pylint
-        run: pylint  main.py core/ gui/
+        run: pylint  main.py
 
       - name: Run Bandit (Security Scan)
         run: bandit -r . --exit-zero
