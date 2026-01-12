@@ -15,10 +15,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-<<<<<<< HEAD
-=======
       id-token: write
->>>>>>> 53ad0c3 (Fix CI/CD: Add tests, fix linting, and update workflow)
 
     steps:
       - name: Checkout code
@@ -31,29 +28,17 @@ jobs:
 
       - name: Install tools
         run: |
-<<<<<<< HEAD
-          pip install pylint pytest bandit build
-
-      # ---------- CI steps ----------
-      - name: Run pylint
-        run: pylint main.py
-=======
           pip install --upgrade pip
           pip install pylint pytest bandit build
 
       - name: Run pylint
         run: pylint --rcfile=.pylintrc main.py core/ gui/
->>>>>>> 53ad0c3 (Fix CI/CD: Add tests, fix linting, and update workflow)
 
       - name: Run Bandit (Security Scan)
         run: bandit -r . --exit-zero
 
       - name: Run pytest
-<<<<<<< HEAD
-        run: pytest -v --tb=short
-=======
         run: pytest
->>>>>>> 53ad0c3 (Fix CI/CD: Add tests, fix linting, and update workflow)
 
       - name: Create data directories
         run: |
@@ -109,7 +94,4 @@ jobs:
             pki-share-*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-<<<<<<< HEAD
-=======
 
->>>>>>> 53ad0c3 (Fix CI/CD: Add tests, fix linting, and update workflow)
