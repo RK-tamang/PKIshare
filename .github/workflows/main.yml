@@ -37,7 +37,7 @@ jobs:
         run: bandit -r . --exit-zero
 
       - name: Run pytest
-        run: pytest --exit-zero || true
+        run: pytest -v --tb=short
 
       - name: Create data directories
         run: |
