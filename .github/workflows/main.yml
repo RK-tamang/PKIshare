@@ -77,7 +77,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value={{version}},enable={{ !env.Activity.Fork }}
+            type=raw,value={{version}}
 
       - name: Build and push Docker image
         if: steps.is_tag.outputs.is_tag == 'true'
