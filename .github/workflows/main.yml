@@ -59,32 +59,6 @@ jobs:
             echo "is_tag=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Python packages
-        if: steps.is_tag.outputs.is_tag == 'true'
-        run: |
-          python -m build --sdist --wheel --outdir dist/
-
-      - name: Log in to GHCR
-        if: steps.is_tag.outputs.is_tag == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        if: steps.is_tag.outputs.is_tag == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ghcr.io/${{ github.repository }}/pki-share:${{ github.ref_name }}
-
-      - name: Save Docker image
-        if: steps.is_tag.outputs.is_tag == 'true'
-        run: |
-          docker save ghcr.io/${{ github.repository }}/pki-share:${{ github.ref_name }} | gzip > pki-share-${{ github.ref_name }}.tar.gz
-
       - name: Create GitHub Release
         if: steps.is_tag.outputs.is_tag == 'true'
         uses: softprops/action-gh-release@v2
@@ -92,10 +66,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           generate_release_notes: true
-          files: |
-            dist/*.whl
-            dist/*.tar.gz
-            pki-share-*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
