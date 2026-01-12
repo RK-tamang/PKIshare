@@ -1,0 +1,97 @@
+name: CI/CD + Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install tools
+        run: |
+          pip install --upgrade pip
+          pip install pylint pytest bandit build
+
+      - name: Run pylint
+        run: pylint --rcfile=.pylintrc main.py core/ gui/
+
+      - name: Run Bandit (Security Scan)
+        run: bandit -r . --exit-zero
+
+      - name: Run pytest
+        run: pytest
+
+      - name: Create data directories
+        run: |
+          mkdir -p data/files data/share
+          touch data/pki_share.db
+
+      # ---------- RELEASE steps (only for tags) ----------
+      - name: Check if this is a tag
+        id: is_tag
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Python packages
+        if: steps.is_tag.outputs.is_tag == 'true'
+        run: |
+          python -m build --sdist --wheel --outdir dist/
+
+      - name: Log in to GHCR
+        if: steps.is_tag.outputs.is_tag == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: steps.is_tag.outputs.is_tag == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}/pki-share:${{ github.ref_name }}
+
+      - name: Save Docker image
+        if: steps.is_tag.outputs.is_tag == 'true'
+        run: |
+          docker save ghcr.io/${{ github.repository }}/pki-share:${{ github.ref_name }} | gzip > pki-share-${{ github.ref_name }}.tar.gz
+
+      - name: Create GitHub Release
+        if: steps.is_tag.outputs.is_tag == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            pki-share-*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

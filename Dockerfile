@@ -19,11 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create persistent directories
-RUN mkdir -p /app/data /app/shared
+RUN mkdir -p /app/data/files /app/data/share
 
 # Copy application files
 COPY core ./core
-COPY data ./data
 COPY gui ./gui
 COPY main.py .
 
