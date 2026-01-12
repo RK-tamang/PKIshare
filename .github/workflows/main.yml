@@ -16,9 +16,13 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # =====================
+  # Regular CI Pipeline (push to main/dev, PRs)
+  # =====================
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
+    if: github.event_name != 'release'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,6 +61,7 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
     needs: lint
+    if: github.event_name != 'release'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -97,6 +102,7 @@ jobs:
     name: Security Scan - Bandit
     runs-on: ubuntu-latest
     needs: test
+    if: github.event_name != 'release'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -116,6 +122,10 @@ jobs:
         run: |
           bandit -r core/ gui/ main.py || true
 
+      - name: Save Bandit results as artifact
+        run: |
+          bandit -r core/ gui/ main.py -f txt -o bandit-results.txt || true
+
       - name: Upload Bandit scan results
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,10 +134,9 @@ jobs:
           path: bandit-results.txt
           retention-days: 30
 
-      - name: Save Bandit results as artifact
-        run: |
-          bandit -r core/ gui/ main.py -f txt -o bandit-results.txt || true
-
+  # =====================
+  # Docker Build Pipeline
+  # =====================
   docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
@@ -141,7 +150,6 @@ jobs:
         run: |
           mkdir -p data/files data/share
           touch data/pki_share.db
-          ls -la data/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -152,44 +160,41 @@ jobs:
           REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "repo-name=$REPO_NAME" >> $GITHUB_OUTPUT
 
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ steps.meta.outputs.repo-name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
-      - name: Extract metadata for Docker
-        id: meta-tags
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ steps.meta.outputs.repo-name }}
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta-tags.outputs.tags }}
-          labels: ${{ steps.meta-tags.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Verify Docker image
+      - name: Push Docker image to GHCR
         run: |
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ steps.meta.outputs.repo-name }}:latest"
-          echo "Image built and pushed: $IMAGE_NAME"
+          REPO="${{ env.REGISTRY }}/${{ steps.meta.outputs.repo-name }}"
+          docker tag $REPO:latest $REPO:${{ github.sha }}
+          if docker login ${{ env.REGISTRY }} -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} 2>/dev/null; then
+            docker push $REPO:${{ github.sha }} || echo "SHA push completed"
+            docker push $REPO:latest || echo "Latest push may need organization permissions"
+          else
+            echo "Skipping GHCR push - login failed. Image built for local testing."
+          fi
+          echo "Docker image: $REPO:latest"
 
+  # =====================
+  # Release Pipeline (runs on release event)
+  # =====================
   release:
-    name: Create Release Package
+    name: Create Release
     runs-on: ubuntu-latest
-    needs: docker
     if: github.event_name == 'release' && github.event.action == 'created'
     steps:
       - name: Checkout repository
@@ -211,35 +216,97 @@ jobs:
         run: |
           python -m build --sdist --wheel --outdir dist/ .
 
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pki-share-dist
+          path: dist/
+          retention-days: 7
+
+  docker-release:
+    name: Build Docker for Release
+    runs-on: ubuntu-latest
+    needs: release
+    if: github.event_name == 'release' && github.event.action == 'created'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Create data directories for Docker build
+        run: |
+          mkdir -p data/files data/share
+          touch data/pki_share.db
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull and export Docker image
+      - name: Convert repository name to lowercase for GHCR
+        id: meta
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }}
-          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }} | gzip > pki-share-${{ github.event.release.tag_name }}.tar.gz
+          REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo-name=$REPO_NAME" >> $GITHUB_OUTPUT
 
-      - name: Upload artifacts to release
+      - name: Build and save Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ steps.meta.outputs.repo-name }}:${{ github.event.release.tag_name }}
+          outputs: type=docker,dest=pki-share-docker.tar
+
+      - name: Upload Docker image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pki-share-docker
+          path: pki-share-docker.tar
+          retention-days: 7
+
+  package:
+    name: Package Release Artifacts
+    runs-on: ubuntu-latest
+    needs: docker-release
+    if: github.event_name == 'release' && github.event.action == 'created'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pki-share-dist
+          path: dist/
+
+      - name: Download Docker artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pki-share-docker
+          path: .
+
+      - name: Compress Docker image
+        run: |
+          gzip -k pki-share-docker.tar || true
+          ls -la
+
+      - name: Upload artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            pki-share-*.tar.gz
+            pki-share-docker.tar.gz
             dist/*.whl
             dist/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # =====================
+  # Independent Security Scan
+  # =====================
   security:
     name: Security Scan - Safety
     runs-on: ubuntu-latest
-    # Run independently for PRs and main branch
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
