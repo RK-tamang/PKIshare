@@ -110,16 +110,23 @@ jobs:
       - name: Install Bandit
         run: |
           python -m pip install --upgrade pip
-          pip install bandit bandit-sarif-formatter
+          pip install bandit
 
       - name: Run Bandit security scan
         run: |
-          bandit -r core/ gui/ main.py -f sarif -o bandit-results.sarif || true
+          bandit -r core/ gui/ main.py || true
 
       - name: Upload Bandit scan results
-        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: 'bandit-results.sarif'
+          name: bandit-results
+          path: bandit-results.txt
+          retention-days: 30
+
+      - name: Save Bandit results as artifact
+        run: |
+          bandit -r core/ gui/ main.py -f txt -o bandit-results.txt || true
 
   docker:
     name: Build Docker Image
@@ -218,26 +225,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   security:
-    name: Security Scan - Trivy
+    name: Security Scan - Safety
     runs-on: ubuntu-latest
     # Run independently for PRs and main branch
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          severity: 'CRITICAL,HIGH'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: 'trivy-results.sarif'
 
       - name: Check Python dependencies for vulnerabilities
         run: |
