@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
 
@@ -29,7 +29,7 @@ jobs:
       - name: Install tools
         run: |
           pip install --upgrade pip
-          pip install pylint pytest bandit build
+          pip install pylint pytest bandit
 
       - name: Install project dependencies
         run: |
@@ -49,7 +49,7 @@ jobs:
           mkdir -p data/files data/share
           touch data/pki_share.db
 
-      # ---------- RELEASE steps (only for tags) ----------
+      # ---------- Docker Release steps (only for tags) ----------
       - name: Check if this is a tag
         id: is_tag
         run: |
@@ -59,43 +59,31 @@ jobs:
             echo "is_tag=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create pyproject.toml for build
+      - name: Log in to GHCR
         if: steps.is_tag.outputs.is_tag == 'true'
-        run: |
-          cat > pyproject.toml << 'EOF'
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "PKIshare"
-version = "${GITHUB_REF_NAME}"
-description = "Secure Digital Certificate and File Sharing System"
-readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "cryptography>=41.0.0",
-    "Pillow>=10.0.0",
-]
-
-[tool.setuptools.packages.find]
-include = ["PKIshare*"]
-exclude = ["data*"]
-EOF
-
-      - name: Create Python packages
-        if: steps.is_tag.outputs.is_tag == 'true'
-        run: |
-          python -m build --sdist --wheel --outdir dist/
-
-      - name: Create GitHub Release
-        if: steps.is_tag.outputs.is_tag == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: docker/login-action@v3
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          files: dist/*.whl dist/*.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        if: steps.is_tag.outputs.is_tag == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value={{version}},enable={{ !env.Activity.Fork }}
+
+      - name: Build and push Docker image
+        if: steps.is_tag.outputs.is_tag == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
