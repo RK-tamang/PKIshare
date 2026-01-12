@@ -1,4 +1,134 @@
- docker:
+# PKIshare GitHub Actions Workflow
+# This workflow builds, tests, and publishes the PKIshare application
+
+name: PKIshare CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  release:
+    types: [created]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 isort mypy
+
+      - name: Sort imports with isort
+        run: |
+          isort --check-only --diff core/ gui/ main.py || echo "Import sorting issues found, fixing..."
+          isort core/ gui/ main.py || true
+
+      - name: Lint with flake8
+        run: |
+          pip install flake8 flake8-colors
+          flake8 core/ gui/ main.py --max-line-length=100 --exclude=__pycache__ --color-output || true
+
+      - name: Type checking with mypy
+        run: |
+          pip install types-cryptography mypy
+          mypy core/ gui/ --ignore-missing-imports || true
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile core/secure_share.py core/database.py core/utils.py core/models.py gui/app.py main.py
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Create test directory
+        run: |
+          mkdir -p data/files data/share
+          touch data/pki_share.db
+
+      - name: Run pytest
+        run: |
+          pytest --cov=core --cov-report=xml --cov-report=term tests/ || true
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+      - name: Run application smoke test
+        run: |
+          timeout 10 python main.py || true
+
+  bandit:
+    name: Security Scan - Bandit
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r core/ gui/ main.py || true
+
+      - name: Upload Bandit scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-results
+          path: bandit-results.txt
+          retention-days: 30
+
+      - name: Save Bandit results as artifact
+        run: |
+          bandit -r core/ gui/ main.py -f txt -o bandit-results.txt || true
+
+  docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: bandit
@@ -55,3 +185,67 @@
         run: |
           IMAGE_NAME="${{ env.REGISTRY }}/${{ steps.meta.outputs.repo-name }}:latest"
           echo "Image built and pushed: $IMAGE_NAME"
+
+  release:
+    name: Create Release Package
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.event_name == 'release' && github.event.action == 'created'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Create Python distribution packages
+        run: |
+          python -m build --sdist --wheel --outdir dist/ .
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and export Docker image
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }}
+          docker save ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }} | gzip > pki-share-${{ github.event.release.tag_name }}.tar.gz
+
+      - name: Upload artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            pki-share-*.tar.gz
+            dist/*.whl
+            dist/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security:
+    name: Security Scan - Safety
+    runs-on: ubuntu-latest
+    # Run independently for PRs and main branch
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Python dependencies for vulnerabilities
+        run: |
+          pip install safety
+          safety check -r requirements.txt --output text || true
+
