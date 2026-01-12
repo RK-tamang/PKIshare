@@ -62,10 +62,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # 9. Build and push Docker image
+      - name: Convert repository name to lowercase
+        run: |
+          echo "REPO_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}/pki-share:latest
+          tags: ghcr.io/${{ env.REPO_LOWER }}/pki-share:latest
 
