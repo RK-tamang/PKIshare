@@ -4,14 +4,9 @@ This module serves as the main entry point for the PKIshare application,
 providing a secure platform for digital certificate and file sharing.
 """
 
-import os
-import sys
 from tkinter import Tk
 
 from gui.app import PKIshareApp
-
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def main():
