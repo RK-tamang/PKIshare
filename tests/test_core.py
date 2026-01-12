@@ -193,9 +193,10 @@ class TestCryptoOperations:
             sign_data,
             verify_signature
         )
+        from cryptography.hazmat.primitives import serialization
         
         private_pem, public_pem = generate_rsa_key_pair()
-        private_key = __import__('serialization').load_pem_private_key(
+        private_key = serialization.load_pem_private_key(
             private_pem, password=None
         )
         
