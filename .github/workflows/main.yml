@@ -31,6 +31,10 @@ jobs:
           pip install --upgrade pip
           pip install pylint pytest bandit build
 
+      - name: Install project dependencies
+        run: |
+          pip install -r requirements.txt
+
       - name: Run pylint
         run: pylint  main.py
 
